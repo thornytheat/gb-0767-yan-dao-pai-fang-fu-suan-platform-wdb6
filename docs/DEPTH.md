@@ -14,6 +14,7 @@
 | M5 报送差异对账 | 核对差值、单据和游离报送 | `GET /api/samples/dirty/reports` | `app/monitor/reconcile.py` `app/monitor/reports.py` | `tests/test_reports.py` |
 | M6 批次留档复跑 | 汇总归档、并发复跑和查看历史 | `POST /api/runs` | `app/archive/run.py` `app/archive/store.py` | `tests/test_runs.py` |
 | M7 监测证据签发 | 下载和校验原件、摘要和判据 | `GET /api/export/{id}` | `app/archive/certificate.py` | `tests/test_evidence.py` |
+| M8 时钟回拨交接 | 同刻保留、挂起小时、确认后跨整点重算、冲突只认一套 | `POST /api/runs/{id}/clock-confirmation` | `app/monitor/calibration.py` `app/monitor/revision.py` `app/archive/clock_run.py` | `tests/test_clock_calibration.py` `tests/test_clock_confirmation.py` |
 
 ## 陷阱登记
 
@@ -30,12 +31,17 @@
 | TRAP-15 | mg、g、µg 混测 | 数量级错误 | 单位系数归一 | `app/monitor/oxygen.py` | `tests/test_oxygen.py::test_units` |
 | TRAP-19 | 启停工况重叠 | 重复免计或顺序覆盖 | 并集与停机优先 | `app/monitor/modes.py` | `tests/test_validity.py::test_overlap_priority` |
 | TRAP-23 | 末端分钟 | 多免计一分钟 | 半开区间 | `app/monitor/modes.py` | `tests/test_validity.py::test_half_open` |
+| TRAP-26 | 回拨前后同一显示分钟 | 后写覆盖或误判修订 | 两条独立采样均保留 `CLOCK_REPEAT`，不互当修订 | `app/monitor/revision.py` | `tests/test_clock_calibration.py::test_same_display_minute_kept_twice_not_revisions` |
+| TRAP-27 | 回拨点当刻送达的读数 | 被误归为回拨后采样 | 收件须严格晚于 `rollback_at`，当刻送达仍是回拨前最后一条 | `app/monitor/calibration.py` | `tests/test_clock_calibration.py` |
+| TRAP-28 | 校时未确认即出正式差额 | 错判小时差额 | 移出/移入小时 `CLOCK_PENDING` 暂挂，确认后双向重算 | `app/monitor/reconcile.py` | `tests/test_clock_calibration.py::test_unconfirmed_hours_withhold_official_difference` |
+| TRAP-29 | 两班并发冲突校时 | 两套确认互相覆盖 | 主键唯一约束只入库一套，后来者 `CLOCK_CONFIRM_CONFLICT` | `app/archive/store.py` `app/archive/clock_run.py` | `tests/test_clock_confirmation.py::test_concurrent_confirmations_single_winner` |
 
 ## 对账规则
 
 - 污样分钟源 109 条记录 = 可读 107 + 重复表头 1 + 结构隔离 1。
 - 120 个应测分钟 = 91 有效 + 8 工况免计 + 21 缺证。参比氧复算与报送按小时核对。
 - 内容摘要与规则版本组成留档键，原件和计算结果同事务存储，重复提交复用原清单。
+- 回拨样例（rollback）：未确认时两小时 `CLOCK_PENDING`、正式差额暂空，10 条回拨后采样以 `CLOCK_REPEAT` 保留；确认后读数按真实分钟归位，移入小时有效分钟 50→60，两小时恢复 `MATCH`，应测分钟守恒仍为 120。
 
 ## 已知边界
 

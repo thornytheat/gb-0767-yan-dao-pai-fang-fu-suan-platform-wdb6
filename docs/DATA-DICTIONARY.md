@@ -8,6 +8,7 @@
 | minutes.csv | `stack,timestamp,value,unit,basis,moisture,oxygen,status,revision,received`。浓度非负，单位 mg/Nm3、g/Nm3、ug/Nm3 或 µg/Nm3；干湿基 `dry/wet`，湿基必填湿度百分比；氧量百分比 0–20；仪器仅 `OK` 有效；修订号非负整数；收件时刻不得早于测量 |
 | modes.csv | `stack,start,end,mode`。带偏移整分钟区间，`STARTUP` 或 `SHUTDOWN` |
 | reports.csv | `stack,hour,value,ticket`。UTC 整点、参比干基浓度 mg/Nm³、原单据号字符串 |
+| clock.json | 可选。`rollback_at` 带偏移整分钟（真实时间下回拨发生的一刻）；`back_minutes` 1–1440 整数，仅允许向过去回拨；`ticket` 非空 ≤40 字交接凭据；`confirmed` 布尔，缺省 false。回拨重叠段须与监测窗口有交集，否则 `BAD_CLOCK` |
 
 CSV 用 UTF-8，可带 BOM；列顺序可变。引号内换行保留，`line` 是记录起始原件行。无内容报 `EMPTY_FILE`，仅表头返回 `header_only`，只有空行或坏行返回 `no_usable_rows` 并隔离。输入记录 = 可读 + 重复表头 + 结构隔离。`-`、`N/A`、`NULL`、`未知` 与空字段均缺值；`null` 为 JSON 缺值，零是有效读数。单文件文本上限 400,000 字符，请求上限 8 MiB。
 
@@ -18,6 +19,7 @@ CSV 用 UTF-8，可带 BOM；列顺序可变。引号内换行保留，`line` �
 3. 窗口和工况统一为 `[start,end)`。启停并集免计，重叠保留两个来源，`SHUTDOWN` 优先展示。剩余分钟按异常状态、缺测、冲突、数值失效分别记为缺证。应测 = 有效 + 免计 + 缺证。
 4. 每小时以完整精度求有效分钟算术平均，达门槛后以 `ROUND_HALF_UP` 公布两位小数；门槛固定，整小时免计时单列。时刻按 UTC 分桶，页面展示 UTC+08:00。
 5. 报送小时冲突按不同 Decimal 原值识别。可比值均显示两位，差额 = 复算 − 报送，绝对差额 ≤ 容差为一致。窗外报送单列，缺数与零分开。
+6. 时钟回拨（clock.json）。回拨只允许向过去拨，重叠段为真实时间 `[rollback_at−back, rollback_at)`。回拨后落在重叠段、且收件严格晚于 `rollback_at` 的采样是回拨后独立采样：与回拨前同刻采样**各自保留为 `CLOCK_REPEAT`，不互当修订**，不产生 SUPERSEDED/DUPLICATE/CONFLICT。未确认时，重叠段所在小时（移出方）与纠正落点 `[rollback_at, rollback_at+back)` 所在小时（移入方）一律 `CLOCK_PENDING`，**暂不出正式差额**，复算与报送照常展示，其余小时、工况免计与收件截止照旧。确认后回拨后读数按 `显示时刻 + back` 归真实分钟，跨整点移动的读数同时重算移出与移入小时；确认后 `CLOCK_REPEAT` 清零、挂起解除。两班冲突确认只接受先入库的一套凭据（`clock_confirmations` 主键唯一约束 + 纯函数 `resolve_confirmation`），后来者返回 `CLOCK_CONFIRM_CONFLICT`，同凭据重复提交幂等。
 
 ## 本地边界
 

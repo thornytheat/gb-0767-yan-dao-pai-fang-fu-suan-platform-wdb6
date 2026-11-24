@@ -1,2 +1,33 @@
+<section class="panel clock-handover">
+  <h2>时钟回拨小时 · 交接办法</h2>
+  <ol class="handover-rules">
+    <li><b>同刻两条各自保留。</b>采样仪回拨后，回拨前后落在同一显示分钟的是两次独立物理采样，均予保留并标「回拨同刻保留」，<b>不得互当修订</b>，不产生替代、重复件或同版冲突。</li>
+    <li><b>未确认先挂起。</b>校时尚未确认、且可能改变某小时采信时，该小时裁决为「校时待确认·暂挂」，<b>暂不出正式差额</b>；复算值与报送原件仍照常列出供交班核对，其余小时对账、工况免计与收件截止规则一律照旧。</li>
+    <li><b>确认后双向重算。</b>校时确认后按真实时刻归桶：跨整点移走的读数，其「移出小时」与「移入小时」都重新汇总并重新对账；工况区间与收件截止判定不变。</li>
+    <li><b>冲突只认一套。</b>两班同时提交相互冲突的校时确认时，系统只接受先入库的一套凭据，后来者退回「校时确认冲突」，以已接受凭据的重算结果为准。</li>
+  </ol>
+  {% if clock and clock.present %}
+  <div class="clock-status {{ 'is-confirmed' if clock.confirmed else 'is-pending' }}">
+    <p>本批次存在回拨：真实时刻 {{ clock.band_start[11:16] }}–{{ clock.band_end[11:16] }}（UTC）为重复段，回拨 {{ clock.back_minutes }} 分钟 · 凭据 <code>{{ clock.ticket }}</code> ·
+      {% if clock.confirmed %}<b>校时已确认</b>，跨整点读数已按真实时刻重算。{% else %}<b>校时待确认</b>，挂起小时：{% for h in clock.pending_hours %}{{ h[11:16] }}{% if not loop.last %}、{% endif %}{% else %}无{% endfor %}（UTC）。{% endif %}</p>
+    {% if clock.repeats %}
+    <p class="clock-repeat-note">回拨同刻保留 {{ clock.repeats | length }} 条（回拨后采样，原件行 {{ clock.repeats | map(attribute='line') | join('、') }}），确认后按真实时刻归位。</p>
+    {% endif %}
+    {% if run_id and not clock.confirmed %}
+    <form class="clock-confirm" data-run="{{ run_id }}">
+      <label>交接凭据 <input name="ticket" required maxlength="40" placeholder="班次/确认单号"></label>
+      <button type="submit">提交校时确认并重算</button>
+      <span class="clock-feedback" role="status" hidden></span>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
 <section class="panel"><h2>报送差值 · mg/Nm³</h2>{% include 'report_table.j2' %}<div class="report-tickets">{% for h in result.reports.rows %}{% for r in h.reports %}<p><code>{{ r.fields.ticket }}</code> · 原件第 {{ r.line }} 行 · {{ r.fields.value }} mg/Nm³</p>{% endfor %}{% endfor %}</div></section>
 <section class="panel"><h2>游离报送记录</h2>{% set rejects=result.reports.isolated %}{% include 'issue_table.j2' %}</section>
+{% if clock and clock.repeats %}
+<section class="panel"><h2>回拨同刻采样保留（不互当修订）</h2>
+<div class="scroll"><table><thead><tr><th>显示分钟 (UTC)</th><th>确认后真实分钟 (UTC)</th><th>原件行</th><th>原值</th><th>收件 (UTC)</th></tr></thead>
+<tbody>{% for r in clock.repeats %}<tr><td>{{ r.display_utc[11:16] }}</td><td>{{ r.true_utc[11:16] }}</td><td>{{ r.line }}</td><td class="raw" title="{{ r.raw|join(' · ') }}">{{ r.raw|join(' · ') }}</td><td>{{ r.fields.received[11:16] }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endif %}

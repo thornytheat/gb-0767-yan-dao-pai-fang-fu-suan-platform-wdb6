@@ -9,4 +9,5 @@ LABELS = {
     'EXEMPT': '工况免计', 'VALID': '采信有效', 'INSUFFICIENT': '有效分钟不足',
     'MATCH': '容差内', 'DEVIATION': '超过容差', 'NO_REPORT': '未找到报送',
     'NO_REFERENCE': '无可比小时值', 'REPORT_CONFLICT': '报送值冲突', 'OUTSIDE_REPORT': '报送超窗',
+    'CLOCK_REPEAT': '回拨同刻保留', 'CLOCK_PENDING': '校时待确认·暂挂',
 }

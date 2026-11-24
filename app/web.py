@@ -22,7 +22,7 @@ def show(page='home'):
     name, run_id = request.args.get('sample', 'dirty'), request.args.get('run')
     history, certificate = [], None
     if run_id:
-        packet = archive().require(run_id)
+        packet = archive().require_effective(run_id)
         results, meta = packet['results'], packet['manifest']
         if page == 'evidence':
             certificate = issue(packet)
@@ -38,4 +38,5 @@ def show(page='home'):
     ceiling = max((float(row['mg_nm3']) for row in chart), default=0)
     return render_template('base.html', page=page, pages=PAGES, name=name, run_id=run_id, history=history,
                            certificate=certificate, result=results, meta=meta, ceiling=ceiling, labels=LABELS,
+                           clock=results.get('clock'),
                            issue_rows=[r for r in results['validity']['rows'] if r['state'] == 'missing' or r['late']])

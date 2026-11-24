@@ -12,7 +12,7 @@ def test_shared_zone_conversion(dirty):
 
 def test_overlap_priority(dirty):
     # TRAP-19
-    selected, conflict, _ = dirty.corrected
+    selected, conflict, _, _ = dirty.corrected
     rows = dirty.ledgers['modes'][0]
     for records in (rows, rows[::-1]):
         intervals, _ = mode_windows(records, dirty.window)

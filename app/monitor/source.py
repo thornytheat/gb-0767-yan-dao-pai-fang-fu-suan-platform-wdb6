@@ -1,17 +1,24 @@
 import json
 from hashlib import sha256
 
-from app.config import FILES, SAMPLES, SOURCE_LIMIT
+from app.config import FILES, OPTIONAL_FILES, SAMPLES, SOURCE_LIMIT
 from app.errors import InputError
+from app.monitor.calibration import parse_clock
 from app.monitor.reader import read_csv
 from app.monitor.schema import HEADERS, Window
 
 
 def sample(name):
-    if name not in {'clean', 'dirty'}:
+    if name not in {'clean', 'dirty', 'rollback'}:
         raise InputError('SAMPLE_UNKNOWN', '找不到指定样例', 404)
-    return {key: (SAMPLES / name / (key + ('.json' if key == 'window' else '.csv')))
-            .read_bytes().decode('utf-8') for key in FILES}
+    sources = {}
+    for key in FILES:
+        sources[key] = (SAMPLES / name / (key + ('.json' if key == 'window' else '.csv'))) \
+            .read_bytes().decode('utf-8')
+    clock_path = SAMPLES / name / 'clock.json'
+    if clock_path.exists():
+        sources['clock'] = clock_path.read_bytes().decode('utf-8')
+    return sources
 
 
 def input_packet(payload):
@@ -20,10 +27,11 @@ def input_packet(payload):
     if 'sample' in payload:
         return sample(str(payload['sample'])), str(payload['sample'])
     files = payload['files']
-    if not isinstance(files, dict) or set(files) != set(FILES) or any(
+    allowed = set(FILES) | set(OPTIONAL_FILES)
+    if not isinstance(files, dict) or not set(FILES).issubset(files) or set(files) - allowed or any(
         not isinstance(value, str) or len(value) > SOURCE_LIMIT for value in files.values()
     ):
-        raise InputError('BAD_PACKET', '四份原件必须为限长 UTF-8 文本')
+        raise InputError('BAD_PACKET', '四份原件必须为限长 UTF-8 文本，校时原件可选')
     try:
         for value in files.values():
             value.encode('utf-8')
@@ -39,7 +47,14 @@ def intake(files):
         raise InputError('BAD_WINDOW', '窗口文件不是有效 JSON') from None
     window = Window.parse(window_raw)
     parsed = {source: read_csv(files[source], source) for source in HEADERS}
-    return window, parsed
+    adjustment = None
+    if files.get('clock') is not None:
+        try:
+            clock_raw = json.loads(files['clock'].removeprefix('﻿'))
+        except (json.JSONDecodeError, RecursionError):
+            raise InputError('BAD_CLOCK', '校时文件不是有效 JSON') from None
+        adjustment = parse_clock(clock_raw, window)
+    return window, parsed, adjustment
 
 
 def digests(files):
